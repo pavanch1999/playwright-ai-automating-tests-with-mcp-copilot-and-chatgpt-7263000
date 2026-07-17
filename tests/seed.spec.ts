@@ -13,7 +13,7 @@ test.describe('Test group', () => {
     await page.fill('#password', '1970beetle');
 
     // Click login button
-    await page.click('button:has-text("Log in")');
+    await page.click('button:has-text("Login")');
 
     // Wait for navigation to board page and verify successful login
     await page.waitForURL('/board');
