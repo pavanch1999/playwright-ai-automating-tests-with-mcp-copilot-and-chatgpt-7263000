@@ -10,8 +10,9 @@
 
 1. The project is set up once, then we work on **one feature at a time**.
 2. For each feature, the AI implements according to the feature spec and the rest of the specs under `specs/`.
-3. **After each feature**, the AI **pauses** for the human to review before moving to the next feature.
-4. When there is **uncertainty** about a decision, the AI should **ask** rather than assume.
+3. The AI should follow pipeline requirements defined in `specs/engineering/pipelines.md` for test automation.
+4. **After each feature**, the AI **pauses** for the human to review before moving to the next feature.
+5. When there is **uncertainty** about a decision, the AI should **ask** rather than assume.
 
 ## Progress Tracking
 

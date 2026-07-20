@@ -59,4 +59,16 @@ export class BoardPage {
   async getRowCount() {
     return this.bugRows.count();
   }
+
+  async searchByTitle(query: string) {
+    await this.searchFor(query);
+  }
+
+  getBugCellByTitle(title: string): Locator {
+    return this.getBugRow(title);
+  }
+
+  getNoResultsMessage(): Locator {
+    return this.page.getByText('No bugs matched.');
+  }
 }
