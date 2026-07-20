@@ -1,121 +1,122 @@
-import { test, expect, Page } from '@playwright/test';
+import type { TestType } from '@playwright/test';
+import { test, expect } from '../fixtures/pageObjectFixtures.js';
 
-// Reuse seed login in each test for isolation
-async function signIn(page: Page) {
-  await page.goto('/login');
-  await page.fill('#username', 'buggy');
-  await page.fill('#password', '1970beetle');
-  await page.click('button:has-text("Login")');
-  await page.waitForURL('/board');
+type PageObjectFixtures = typeof test extends TestType<infer Fixtures, infer _WorkerFixtures> ? Fixtures : never;
+
+async function createBoardBug({
+  boardPage,
+  createBugModalPage,
+  title,
+}: {
+  boardPage: PageObjectFixtures['boardPage'];
+  createBugModalPage: PageObjectFixtures['createBugModalPage'];
+  title: string;
+}) {
+  await boardPage.openCreateBugModal();
+  await expect(createBugModalPage.dialog).toBeVisible();
+  await createBugModalPage.createBug({
+    title,
+    description: 'Temporary bug for board behavior verification',
+  });
+  await expect(createBugModalPage.dialog).toBeHidden();
+  await expect(boardPage.getBugRow(title)).toBeVisible();
 }
 
 test.describe('Board behaviors (search, sort, filter, edit, delete)', () => {
-  test('filters bugs by search query as user types', async ({ page }) => {
-    await signIn(page);
+  test('filters bugs by search query as user types', async ({ page, loginPage, boardPage, createBugModalPage }) => {
+    await loginPage.login('buggy', '1970beetle');
 
-    // Ensure search field exists
-    const search = page.locator('input[placeholder*="Search" i]');
-    await expect(search).toBeVisible();
+    const bugTitle = `Login board test ${Date.now()}`;
+    await createBoardBug({ boardPage, createBugModalPage, title: bugTitle });
 
-    // Type a term known to match an existing bug
-    await search.fill('Login');
+    await expect(boardPage.searchInput).toBeVisible();
+
+    await boardPage.searchFor('Login');
     await page.waitForTimeout(300);
 
-    // Expect at least one matching row and non-matching rows hidden
-    await expect(page.getByText('Login fails with special characters')).toBeVisible();
+    await expect(page.getByText(bugTitle)).toBeVisible();
 
-    // Clear search
-    await search.fill('');
+    await boardPage.searchFor('');
     await page.waitForTimeout(200);
 
-    // Expect multiple rows returned
-    const rowCount = await page.locator('table tbody tr').count();
+    const rowCount = await boardPage.getRowCount();
     expect(rowCount).toBeGreaterThanOrEqual(1);
   });
 
-  test('toggles sort direction when clicking column headers', async ({ page }) => {
-    await signIn(page);
+  test('toggles sort direction when clicking column headers', async ({ page, loginPage, boardPage, createBugModalPage }) => {
+    await loginPage.login('buggy', '1970beetle');
 
-    // Click Title header to sort ascending then descending and verify first-row title changes
-    const titleHeader = page.getByRole('button', { name: 'Title' });
-    await expect(titleHeader).toBeVisible();
+    const bugTitle = `Sort board test ${Date.now()}`;
+    await createBoardBug({ boardPage, createBugModalPage, title: bugTitle });
 
-    await titleHeader.click();
+    await expect(boardPage.titleHeaderButton).toBeVisible();
+
+    await boardPage.clickTitleHeader();
     await page.waitForTimeout(200);
-    const firstTitleAsc = await page.locator('table tbody tr').first().locator('td').nth(2).innerText();
+    const firstTitleAsc = await boardPage.getFirstRowTitle();
 
-    await titleHeader.click();
+    await boardPage.clickTitleHeader();
     await page.waitForTimeout(200);
-    const firstTitleDesc = await page.locator('table tbody tr').first().locator('td').nth(2).innerText();
+    const firstTitleDesc = await boardPage.getFirstRowTitle();
 
     expect(firstTitleAsc).not.toBe(firstTitleDesc);
   });
 
-  test('filters bugs by state (Open/Closed)', async ({ page }) => {
-    await signIn(page);
+  test('filters bugs by state (Open/Closed)', async ({ page, loginPage, boardPage, createBugModalPage }) => {
+    await loginPage.login('buggy', '1970beetle');
 
-    const openBtn = page.getByRole('button', { name: 'Open' });
-    const closedBtn = page.getByRole('button', { name: 'Closed' });
-    await expect(openBtn).toBeVisible();
-    await expect(closedBtn).toBeVisible();
+    const bugTitle = `State board test ${Date.now()}`;
+    await createBoardBug({ boardPage, createBugModalPage, title: bugTitle });
 
-    // Click Closed - board may show no rows or only closed ones
-    await closedBtn.click();
+    await expect(boardPage.openFilterButton).toBeVisible();
+    await expect(boardPage.closedFilterButton).toBeVisible();
+
+    await boardPage.clickClosedFilter();
     await page.waitForTimeout(200);
-    // If no rows, show message or zero rows; assert table rows count is >= 0
-    const rowsClosed = await page.locator('table tbody tr').count();
+    const rowsClosed = await boardPage.getRowCount();
     expect(rowsClosed).toBeGreaterThanOrEqual(0);
 
-    // Return to Open
-    await openBtn.click();
+    await boardPage.clickOpenFilter();
     await page.waitForTimeout(200);
-    const rowsOpen = await page.locator('table tbody tr').count();
+    const rowsOpen = await boardPage.getRowCount();
     expect(rowsOpen).toBeGreaterThanOrEqual(0);
   });
 
-  test('opens edit-bug modal and shows editable fields', async ({ page }) => {
-    await signIn(page);
+  test('opens edit-bug modal and shows editable fields', async ({ page, loginPage, boardPage, createBugModalPage, editBugModalPage }) => {
+    await loginPage.login('buggy', '1970beetle');
 
-    // Open the first bug row via accessible button role
-    const firstRow = page.getByRole('button', { name: /Login fails with special characters/i }).first();
-    await expect(firstRow).toBeVisible();
-    await firstRow.click();
+    const bugTitle = `Edit board test ${Date.now()}`;
+    await createBoardBug({ boardPage, createBugModalPage, title: bugTitle });
 
-    const editDialog = page.getByRole('dialog', { name: /Edit bug #/i });
-    await expect(editDialog).toBeVisible();
+    await boardPage.openBug(bugTitle);
+    await expect(editBugModalPage.dialog).toBeVisible();
+    await expect(editBugModalPage.titleInput).toBeVisible();
+    await expect(editBugModalPage.severitySelect).toBeVisible();
+    await expect(editBugModalPage.stateSelect).toBeVisible();
+    await expect(editBugModalPage.ownerInput).toBeVisible();
+    await expect(editBugModalPage.descriptionTextarea).toBeVisible();
 
-    // Expect the actual modal fields from EditBugModal.tsx
-    await expect(editDialog.locator('#edit-bug-title')).toBeVisible();
-    await expect(editDialog.locator('#edit-bug-severity')).toBeVisible();
-    await expect(editDialog.locator('#edit-bug-state')).toBeVisible();
-    await expect(editDialog.locator('#edit-bug-owner')).toBeVisible();
-    await expect(editDialog.locator('#edit-bug-description')).toBeVisible();
-
-    // Close modal with Escape
-    await page.keyboard.press('Escape');
-    await expect(editDialog).toBeHidden();
+    await editBugModalPage.closeWithEscape();
+    await expect(editBugModalPage.dialog).toBeHidden();
   });
 
-  test.only('deletes a bug from the edit modal when Delete exists', async ({ page }) => {
-    await signIn(page);
+  test('deletes a bug from the edit modal when Delete exists', async ({ page, loginPage, boardPage, createBugModalPage, editBugModalPage }) => {
+    await loginPage.login('buggy', '1970beetle');
 
-    const firstRowButton = page.locator('table button').first();
-    await expect(firstRowButton).toBeVisible();
-    await firstRowButton.click();
-    await page.waitForTimeout(200);
+    const bugTitle = `Delete board test ${Date.now()}`;
+    await createBoardBug({ boardPage, createBugModalPage, title: bugTitle });
 
-    const deleteBtnCount = await page.getByRole('button', { name: 'Delete' }).count();
+    await boardPage.openBug(bugTitle);
+    await expect(editBugModalPage.deleteButton).toBeVisible();
+
+    const deleteBtnCount = await editBugModalPage.deleteButton.count();
     if (deleteBtnCount === 0) {
-      // Skip this test at runtime when Delete button is not present
       test.skip(true, 'Delete button not present in modal');
       return;
     }
 
-    // Click delete and confirm (if confirmation present, handle it)
-    await page.getByRole('button', { name: 'Delete' }).click();
-    // Wait briefly and assert the modal closed and row removed
+    await editBugModalPage.deleteBug();
     await page.waitForTimeout(500);
-    // We can't reliably assert which row was removed; ensure board still reachable
     await expect(page).toHaveURL(/\/board/);
   });
 });
